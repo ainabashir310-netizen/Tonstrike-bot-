@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tonstrike Bot</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #0f172a;
+      color: #ffffff;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .sub-text {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-align: center;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      color: #ffffff;
+      transition: opacity 0.2s;
+    }
+
+    .btn:active {
+      opacity: 0.8;
+    }
+
+    .btn-blue { background-color: #0284c7; }
+    .btn-purple { background-color: #9333ea; }
+    .btn-green { background-color: #16a34a; }
+    .btn-dark-blue { background-color: #2563eb; }
+
+    .task-item {
+      background-color: #0f172a;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task-title {
+      font-size: 0.85rem;
+      max-width: 70%;
+    }
+
+    .task-btn {
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      border: none;
+      font-weight: 600;
+      color: white;
+      background-color: #0284c7;
+      cursor: pointer;
+    }
+
+    .task-btn.done {
+      background-color: #334155;
+      color: #94a3b8;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background-color: #0f172a;
+      color: #ffffff;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    #status-msg {
+      font-size: 0.85rem;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .msg-success { color: #4ade80; }
+    .msg-error { color: #f87171; }
+  </style>
+</head>
+<body>
+
+  <!-- Wallet Setup Card -->
+  <div class="card">
+    <div class="card-title">👛 Wallet Address</div>
+    <input type="text" id="wallet-input" placeholder="Enter TON or USDT wallet address">
+    <button class="btn btn-blue" onclick="saveWalletAddress()">Save Wallet Address</button>
+  </div>
+
+  <!-- Daily Rewards Card -->
+  <div class="card">
+    <div class="card-title">🎁 Daily Rewards & Spin</div>
+    <button class="btn btn-blue">Claim Daily USDT (+0.10)</button>
+    <button class="btn btn-purple">🎰 Lucky Spin Wheel</button>
+  </div>
+
+  <!-- Task Wall Card -->
+  <div class="card">
+    <div class="card-title">📋 Task Wall</div>
+    
+    <div class="task-item">
+      <span class="task-title">Join Official Telegram Channel (+0.2 USDT)</span>
+      <button class="task-btn done">Done</button>
+    </div>
+
+    <div class="task-item">
+      <span class="task-title">Follow us on X (Twitter) (+0.15 USDT)</span>
+      <button class="task-btn">Start</button>
+    </div>
+
+    <div class="task-item">
+      <span class="task-title">Subscribe to YouTube Channel (+0.25 USDT)</span>
+      <button class="task-btn done">Done</button>
+    </div>
+  </div>
+
+  <!-- Withdrawal Card -->
+  <div class="card">
+    <div class="card-title">💸 Withdraw Earnings</div>
+    <div class="sub-text">$0.25 USDT auto-deducted for network gas</div>
+
+    <button class="btn btn-green" onclick="handleWithdraw('USDT', 3.00)">Withdraw USDT (Min 3.00)</button>
+    <button class="btn btn-dark-blue" onclick="handleWithdraw('TON', 1.00)">Withdraw TON (Min 1.00)</button>
+  </div>
+
+  <div id="status-msg"></div>
+
+  <script>
+    // Initialize Telegram WebApp SDK
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.ready();
+
+    // Fetch user details from Telegram context
+    const tgUser = tg?.initDataUnsafe?.user;
+    const userId = tgUser ? tgUser.id : 'demo_user_123';
+    const username = tgUser ? tgUser.username : '';
+
+    function showStatus(text, isError = false) {
+      const msgDiv = document.getElementById('status-msg');
+      msgDiv.textContent = text;
+      msgDiv.className = isError ? 'msg-error' : 'msg-success';
+    }
+
+    // Load saved user wallet on load
+    async function initUserWallet() {
+      try {
+        const res = await fetch(`/api/get-wallet/${userId}`);
+        const data = await res.json();
+        if (data.success && data.walletAddress) {
+          document.getElementById('wallet-input').value = data.walletAddress;
+        }
+      } catch (err) {
+        console.error('Error fetching wallet:', err);
+      }
+    }
+
+    // Save wallet address to backend
+    async function saveWalletAddress() {
+      const walletInput = document.getElementById('wallet-input');
+      const walletAddress = walletInput ? walletInput.value.trim() : '';
+
+      if (!walletAddress) {
+        showStatus('Please enter a valid wallet address.', true);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/save-wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, walletAddress })
+        });
+        const data = await res.json();
+        showStatus(data.message, !data.success);
+      } catch (err) {
+        console.error('Error saving wallet:', err);
+        showStatus('Failed to save wallet address.', true);
+      }
+    }
+
+    // Submit withdrawal request
+    async function handleWithdraw(asset, amount) {
+      const walletInput = document.getElementById('wallet-input');
+      const walletAddress = walletInput ? walletInput.value.trim() : '';
+
+      if (!walletAddress) {
+        showStatus('Please save your wallet address before withdrawing!', true);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            username,
+            walletAddress,
+            amount,
+            asset
+          })
+        });
+        const data = await res.json();
+        showStatus(data.message, !data.success);
+      } catch (err) {
+        console.error('Error processing withdrawal:', err);
+        showStatus('Withdrawal request failed.', true);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initUserWallet);
+  </script>
+</body>
+</html>
