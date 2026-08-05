@@ -1,0 +1,2 @@
+# Tonstrike-bot-
+Mining bot 
