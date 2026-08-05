@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TonStrike Mining Bot</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; }
+    .card { background: #1e293b; border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid #334155; text-align: center; }
+    h1 { font-size: 24px; color: #38bdf8; margin-bottom: 8px; }
+    .balance { font-size: 32px; font-weight: bold; color: #4ade80; margin: 12px 0; }
+    .sub-balance { font-size: 14px; color: #94a3b8; }
+    button { background: #0284c7; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; width: 100%; margin-top: 8px; cursor: pointer; font-size: 16px; }
+    button:active { background: #0369a1; transform: scale(0.98); }
+    input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; margin-top: 8px; font-size: 14px; }
+    .task-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 12px; border-radius: 10px; margin-top: 8px; font-size: 14px; }
+    .task-item button { width: auto; padding: 6px 12px; font-size: 12px; }
+    #msg { margin-top: 10px; font-size: 14px; font-weight: bold; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>⚡ TonStrike Mining</h1>
+    <div class="balance"><span id="usdt-bal">0.0000</span> USDT</div>
+    <div class="sub-balance">TON Balance: <span id="ton-bal">0.00</span> TON | Tier: <span id="tier-level">1</span></div>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ Wallet Configuration</h3>
+    <input type="text" id="wallet-input" placeholder="Paste TON Wallet Address (e.g., EQ...)" />
+    <button onclick="saveWallet()">Save Wallet</button>
+  </div>
+
+  <div class="card">
+    <h3>🎁 Daily Rewards & Spin</h3>
+    <button onclick="claimDaily()">Claim Daily USDT (+0.10)</button>
+    <button onclick="spinWheel()" style="background: #8b5cf6; margin-top: 8px;">🎰 Lucky Spin Wheel</button>
+  </div>
+
+  <div class="card">
+    <h3>📋 Task Wall</h3>
+    <div id="tasks-container">Loading tasks...</div>
+  </div>
+
+  <div class="card">
+    <h3>💸 Withdraw Earnings</h3>
+    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">$0.25 USDT auto-deducted for network gas</p>
+    <button onclick="withdraw('USDT')" style="background: #16a34a;">Withdraw USDT (Min 3.00)</button>
+    <button onclick="withdraw('TON')" style="background: #2563eb; margin-top: 8px;">Withdraw TON (Min 1.00)</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.expand();
+
+    const userId = tg?.initDataUnsafe?.user?.id || 123456789; // Fallback for local testing
+    let userWallet = "";
+
+    function showMsg(text, isError = false) {
+      const el = document.getElementById("msg");
+      el.style.color = isError ? "#f87171" : "#4ade80";
+      el.innerText = text;
+      setTimeout(() => el.innerText = "", 5000);
+    }
+
+    async function initUser() {
+      try {
+        const res = await fetch("/api/init-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, deviceFingerprint: `dev_${userId}` })
+        });
+        const data = await res.json();
+        if (data.user) {
+          if (data.user.wallet) document.getElementById("wallet-input").value = data.user.wallet;
+        }
+      } catch (err) {
+        console.error("Init Error:", err);
+      }
+    }
+
+    async function syncMining() {
+      try {
+        const res = await fetch("/api/sync-mining", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId })
+        });
+        const data = await res.json();
+        if (data.usdtBalance !== undefined) {
+          document.getElementById("usdt-bal").innerText = data.usdtBalance.toFixed(4);
+          document.getElementById("ton-bal").innerText = data.tonBalance.toFixed(2);
+          document.getElementById("tier-level").innerText = data.tier;
+        }
+      } catch (err) {
+        console.error("Sync Error:", err);
+      }
+    }
+
+    async function saveWallet() {
+      const walletAddress = document.getElementById("wallet-input").value.trim();
+      if (!walletAddress) return showMsg("Enter a valid wallet address!", true);
+
+      const res = await fetch("/api/save-wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, walletAddress })
+      });
+      const data = await res.json();
+      if (data.success) showMsg("Wallet address saved!");
+      else showMsg(data.error || "Failed to save wallet.", true);
+    }
+
+    async function claimDaily() {
+      const res = await fetch("/api/claim-daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (data.success) showMsg(data.message);
+      else showMsg(data.error, true);
+    }
+
+    async function spinWheel() {
+      const res = await fetch("/api/spin-wheel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (data.success) showMsg(data.message);
+      else showMsg(data.error, true);
+    }
+
+    async function loadTasks() {
+      const res = await fetch(`/api/tasks/${userId}`);
+      const data = await res.json();
+      const container = document.getElementById("tasks-container");
+      container.innerHTML = "";
+
+      if (data.tasks) {
+        data.tasks.forEach(t => {
+          const div = document.createElement("div");
+          div.className = "task-item";
+          div.innerHTML = `
+            <span>${t.title} (+${t.reward} USDT)</span>
+            <button onclick="doTask('${t.id}', '${t.url}')" ${t.completed ? 'disabled style="opacity:0.5"' : ''}>
+              ${t.completed ? 'Done' : 'Start'}
+            </button>
+          `;
+          container.appendChild(div);
+        });
+      }
+    }
+
+    async function doTask(taskId, url) {
+      window.open(url, "_blank");
+      setTimeout(async () => {
+        const res = await fetch("/api/complete-task", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, taskId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showMsg(data.message);
+          loadTasks();
+        } else {
+          showMsg(data.error, true);
+        }
+      }, 3000);
+    }
+
+    async function withdraw(currency) {
+      showMsg(`Processing ${currency} withdrawal...`);
+      const res = await fetch("/api/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, currency })
+      });
+      const data = await res.json();
+      if (data.success) showMsg(data.message);
+      else showMsg(data.error, true);
+    }
+
+    // Initialize App
+    initUser();
+    loadTasks();
+    setInterval(syncMining, 1000);
+  </script>
+</body>
+</html>
