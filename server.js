@@ -5,8 +5,8 @@ const app = express();
 // Middleware to parse incoming JSON requests
 app.use(express.json());
 
-// Serve static files from your 'Public' directory (case-sensitive)
-app.use(express.static(path.join(__dirname, 'Public')));
+// Serve static files from your 'public' directory (lowercase)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // In-memory data store for user wallets and withdrawal queues
 const userWallets = {};
@@ -92,9 +92,9 @@ app.post('/api/withdraw', (req, res) => {
   });
 });
 
-// 4. Fallback route: Send index.html for Web App initialization
+// 4. Fallback route: Send index.html from lowercase 'public' folder
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'Public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start Express server
@@ -102,3 +102,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+         
